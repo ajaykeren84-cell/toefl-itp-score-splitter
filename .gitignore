@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+package-lock.json.bak
+
+# Storage files (keep directory structure with .gitkeep)
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/output/*
+!storage/output/.gitkeep
+
+# Tesseract OCR Cache
+*.traineddata
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment and OS Files
+.env
+.env.local
+.DS_Store
+Thumbs.db
+
+# IDE & Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary test scripts
+scratch/
+test_*.js

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOEFL ITP Score Splitter & OCR Pro (Multi-Page)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .split-handle {
+            cursor: ns-resize;
+            user-select: none;
+        }
+        .canvas-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 text-white p-2 rounded-lg shadow-md flex items-center justify-center">
+                    <i data-lucide="layers" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-900 leading-tight">TOEFL ITP Score Splitter</h1>
+                    <p class="text-xs text-slate-500">Otomasi Multi-Halaman & Ekstraksi Nilai Institusi</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Multi-Page Ready
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        <!-- Progress Steps -->
+        <div class="grid grid-cols-3 gap-4">
+            <div id="step-badge-1" class="flex items-center gap-3 p-3 rounded-xl border border-indigo-500 bg-indigo-50 text-indigo-700 transition">
+                <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">1</div>
+                <div>
+                    <div class="text-xs font-medium text-indigo-500">Langkah 1</div>
+                    <div class="text-sm font-semibold">Unggah Scan Multi-Halaman</div>
+                </div>
+            </div>
+            <div id="step-badge-2" class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white text-slate-400 transition">
+                <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm">2</div>
+                <div>
+                    <div class="text-xs font-medium text-slate-400">Langkah 2</div>
+                    <div class="text-sm font-semibold">Verifikasi Garis Potong</div>
+                </div>
+            </div>
+            <div id="step-badge-3" class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white text-slate-400 transition">
+                <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm">3</div>
+                <div>
+                    <div class="text-xs font-medium text-slate-400">Langkah 3</div>
+                    <div class="text-sm font-semibold">Review Data & Ekspor</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 1: Upload Area -->
+        <div id="upload-section" class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm text-center">
+            <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl p-10 transition cursor-pointer flex flex-col items-center justify-center bg-slate-50 hover:bg-indigo-50/30">
+                <input type="file" id="file-input" class="hidden" accept=".pdf,image/jpeg,image/png">
+                <div class="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mb-4">
+                    <i data-lucide="file-up" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 mb-1">Tarik & Letakkan Berkas PDF Multi-Halaman di Sini</h3>
+                <p class="text-sm text-slate-500 mb-4">Mendukung dokumen PDF banyak halaman (otomatis memproses semua halaman sekaligus)</p>
+                <div class="flex gap-3">
+                    <button type="button" onclick="document.getElementById('file-input').click()" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm transition shadow-sm flex items-center gap-2">
+                        <i data-lucide="folder-open" class="w-4 h-4"></i> Pilih Berkas Komputer
+                    </button>
+                    <button type="button" id="use-sample-btn" class="px-5 py-2.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium text-sm transition flex items-center gap-2">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i> Gunakan Berkas Sampel 5 Halaman
+                    </button>
+                </div>
+            </div>
+            <div id="upload-loading" class="hidden mt-6 text-center">
+                <div class="inline-flex items-center gap-2 text-indigo-600 font-medium text-sm">
+                    <svg class="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Membongkar seluruh halaman PDF dan menganalisis batas pemotongan...
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 2: Interactive Splitter & Line Adjustment -->
+        <div id="splitter-section" class="hidden space-y-6">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-lg font-bold text-slate-900">Penyesuaian Garis Pemotong Multi-Halaman</h2>
+                        <span id="page-count-badge" class="px-2.5 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs">
+                            1 Halaman
+                        </span>
+                    </div>
+                    <p class="text-sm text-slate-500">Garis potong ini akan diterapkan seragam ke seluruh halaman pindaian.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <!-- Page Switcher -->
+                    <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+                        <button type="button" id="prev-page-btn" class="px-2 py-1 rounded bg-white hover:bg-slate-200 text-slate-700 font-semibold disabled:opacity-50">◀</button>
+                        <span id="page-indicator" class="px-2 font-semibold text-slate-800">Hal 1 / 1</span>
+                        <button type="button" id="next-page-btn" class="px-2 py-1 rounded bg-white hover:bg-slate-200 text-slate-700 font-semibold disabled:opacity-50">▶</button>
+                    </div>
+
+                    <div class="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200">
+                        <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> Garis 1: <span id="badge-cut1" class="font-mono text-slate-800">Y=780</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200">
+                        <span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Garis 2: <span id="badge-cut2" class="font-mono text-slate-800">Y=1520</span>
+                    </div>
+                    <button type="button" id="start-process-btn" class="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition shadow-md flex items-center gap-2">
+                        <i data-lucide="play" class="w-4 h-4"></i> Proses Semua Halaman & OCR
+                    </button>
+                </div>
+            </div>
+
+            <!-- Real-time Progress Bar Card (Appears during processing) -->
+            <div id="progress-card" class="hidden bg-white rounded-2xl border border-indigo-200 p-6 shadow-md bg-gradient-to-r from-indigo-50/50 to-white">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="progress-status-text" class="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4 text-indigo-600" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Memulai pemrosesan...
+                    </span>
+                    <span id="progress-percent" class="text-sm font-extrabold text-indigo-600 font-mono">0%</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                    <div id="progress-fill" class="bg-indigo-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 text-xs text-slate-500 flex justify-between">
+                    <span id="progress-subtext">Menyiapkan potongan gambar...</span>
+                    <span id="progress-count">0 / 0 Peserta</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex justify-center">
+                <div class="canvas-container relative inline-block border border-slate-300" id="canvas-wrapper">
+                    <canvas id="split-canvas" class="block max-w-full h-auto max-h-[75vh]"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: Review Results & Export -->
+        <div id="results-section" class="hidden space-y-6">
+            
+            <!-- Global Action Bar -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                        <i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-600"></i>
+                        Hasil Ekstraksi Multi-Halaman Selesai
+                    </h2>
+                    <p class="text-sm text-slate-500"><span id="total-reports-text" class="font-bold text-indigo-600">0 Peserta</span> berhasil diproses dan siap diekspor tanpa karakter underscore.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a href="/api/download/excel" class="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm transition shadow-sm flex items-center gap-2">
+                        <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Unduh Rekap Excel
+                    </a>
+                    <a href="/api/download/zip" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition shadow-md flex items-center gap-2">
+                        <i data-lucide="archive" class="w-4 h-4"></i> Unduh Paket ZIP Master
+                    </a>
+                    <button type="button" id="reset-btn" class="p-2.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-600 transition" title="Proses Dokumen Baru">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search & Filter Bar -->
+            <div class="flex items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                <div class="relative flex-1 max-w-md">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+                    <input type="text" id="search-input" placeholder="Cari nama peserta atau nomor siswa..." class="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-xs focus:outline-indigo-500">
+                </div>
+                <div class="text-xs text-slate-500">
+                    Menampilkan <span id="visible-count" class="font-bold text-slate-800">0</span> dari <span id="total-count" class="font-bold text-slate-800">0</span> peserta
+                </div>
+            </div>
+
+            <!-- Participant Cards Grid -->
+            <div id="cards-container" class="space-y-6">
+                <!-- Dynamically populated via JS -->
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Image Modal for Full Preview -->
+    <div id="preview-modal" class="fixed inset-0 z-50 bg-black/80 hidden items-center justify-center p-4">
+        <div class="relative max-w-5xl w-full max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            <div class="flex items-center justify-between p-4 border-b border-slate-200">
+                <h3 id="modal-title" class="font-bold text-slate-800">Pratinjau Potongan Dokumen</h3>
+                <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-4 overflow-auto flex justify-center bg-slate-100">
+                <img id="modal-img" src="" alt="Pratinjau" class="max-w-full h-auto rounded border border-slate-300 shadow">
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="app.js"></script>
+    <script>
+        if (window.lucide) { lucide.createIcons(); }
+    </script>
+</body>
+</html>
