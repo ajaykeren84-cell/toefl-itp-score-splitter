@@ -31,3 +31,7 @@ Thumbs.db
 # Temporary test scripts
 scratch/
 test_*.js
+
+# Binaries
+node.exe
+*.exe
