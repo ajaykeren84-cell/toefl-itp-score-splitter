@@ -55,21 +55,24 @@ function setupUploadEvents() {
         }
     });
 
-    document.getElementById('use-sample-btn').addEventListener('click', async () => {
-        showLoading(true);
-        try {
-            const res = await fetch('/storage/uploads/sample_multipage.pdf');
-            if (res.ok) {
-                const blob = await res.blob();
-                handleFileUpload(new File([blob], 'Sample_TOEFL_5Pages.pdf', { type: 'application/pdf' }));
-            } else {
-                throw new Error('Berkas sampel tidak ditemukan');
+    const sampleBtn = document.getElementById('use-sample-btn');
+    if (sampleBtn) {
+        sampleBtn.addEventListener('click', async () => {
+            showLoading(true);
+            try {
+                const res = await fetch('/storage/uploads/sample_multipage.pdf');
+                if (res.ok) {
+                    const blob = await res.blob();
+                    handleFileUpload(new File([blob], 'Sample_TOEFL_5Pages.pdf', { type: 'application/pdf' }));
+                } else {
+                    throw new Error('Berkas sampel tidak ditemukan');
+                }
+            } catch (e) {
+                alert('Error memuat sampel: ' + e.message);
+                showLoading(false);
             }
-        } catch (e) {
-            alert('Error memuat sampel: ' + e.message);
-            showLoading(false);
-        }
-    });
+        });
+    }
 }
 
 async function handleFileUpload(file) {
