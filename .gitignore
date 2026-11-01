@@ -35,3 +35,5 @@ test_*.js
 # Binaries
 node.exe
 *.exe
+*.zip
+*.ico
