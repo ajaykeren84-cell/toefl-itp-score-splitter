@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -13,105 +14,233 @@ namespace ToeflScoreSplitter
     static class Program
     {
         private static Process serverProcess = null;
+        private static NotifyIcon trayIcon = null;
+        private static ApplicationContext appContext = null;
+        private static string logFilePath = null;
+
+        private static void Log(string message)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(logFilePath))
+                {
+                    File.AppendAllText(logFilePath, "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] " + message + Environment.NewLine);
+                }
+            }
+            catch { }
+        }
 
         [STAThread]
         static void Main()
         {
-            try
+            bool createdNew;
+            using (Mutex mutex = new Mutex(true, "TOEFL_ITP_Score_Splitter_Mutex_v2", out createdNew))
             {
-                // Dedicated App directory in LocalAppData
-                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string targetDir = Path.Combine(localAppData, "TOEFL_ITP_Score_Splitter_App");
-                string nodeExe = Path.Combine(targetDir, "node.exe");
-                string serverJs = Path.Combine(targetDir, "server.js");
-                string versionTag = Path.Combine(targetDir, "v1.0.1.tag");
-
-                // Extract embedded bundle if not present or needs update
-                if (!File.Exists(versionTag) || !File.Exists(nodeExe) || !File.Exists(serverJs))
+                if (!createdNew)
                 {
-                    if (Directory.Exists(targetDir))
-                    {
-                        try { Directory.Delete(targetDir, true); } catch { }
-                    }
-                    Directory.CreateDirectory(targetDir);
+                    // An instance is already running; simply bring up the web app in the browser
+                    LaunchBrowser("http://localhost:3800");
+                    return;
+                }
 
-                    Assembly assembly = Assembly.GetExecutingAssembly();
-                    Stream stream = assembly.GetManifestResourceStream("app_bundle.zip");
-                    if (stream == null)
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                AppDomain.CurrentDomain.ProcessExit += (s, e) => CleanupServer();
+
+                try
+                {
+                    string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    string targetDir = Path.Combine(localAppData, "TOEFL_ITP_Score_Splitter_App");
+                    logFilePath = Path.Combine(targetDir, "launcher.log");
+                    string nodeExe = Path.Combine(targetDir, "node.exe");
+                    string serverJs = Path.Combine(targetDir, "server.js");
+                    string versionTag = Path.Combine(targetDir, "v1.0.3.tag");
+
+                    Log("=== TOEFL ITP Score Splitter Portable Starting ===");
+
+                    // Extract embedded bundle if not present or needs update
+                    if (!File.Exists(versionTag) || !File.Exists(nodeExe) || !File.Exists(serverJs))
                     {
-                        foreach (string res in assembly.GetManifestResourceNames())
+                        Log("Extracting embedded bundle to " + targetDir);
+                        KillTargetDirNodeProcesses(targetDir);
+
+                        if (Directory.Exists(targetDir))
                         {
-                            if (res.EndsWith("app_bundle.zip", StringComparison.OrdinalIgnoreCase))
+                            try { Directory.Delete(targetDir, true); } catch { }
+                        }
+                        Directory.CreateDirectory(targetDir);
+
+                        Assembly assembly = Assembly.GetExecutingAssembly();
+                        Stream stream = assembly.GetManifestResourceStream("app_bundle.zip");
+                        if (stream == null)
+                        {
+                            foreach (string res in assembly.GetManifestResourceNames())
                             {
-                                stream = assembly.GetManifestResourceStream(res);
-                                break;
+                                if (res.EndsWith("app_bundle.zip", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    stream = assembly.GetManifestResourceStream(res);
+                                    break;
+                                }
                             }
+                        }
+
+                        if (stream != null)
+                        {
+                            ExtractZipStream(stream, targetDir);
+                            stream.Dispose();
+                            try { File.WriteAllText(versionTag, "v1.0.3"); } catch { }
+                            Log("Extraction complete.");
+                        }
+                        else
+                        {
+                            Log("ERROR: Embedded resource app_bundle.zip not found!");
                         }
                     }
 
-                    if (stream != null)
+                    Directory.SetCurrentDirectory(targetDir);
+
+                    // Start node server if port 3800 is not already in use
+                    if (!IsPortInUse(3800))
                     {
-                        ExtractZipStream(stream, targetDir);
-                        stream.Dispose();
-                        try { File.WriteAllText(versionTag, "v1.0.1"); } catch { }
+                        Log("Port 3800 is free. Starting internal node.exe...");
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = nodeExe;
+                        psi.Arguments = "\"" + serverJs + "\"";
+                        psi.WorkingDirectory = targetDir;
+                        psi.CreateNoWindow = true;
+                        psi.UseShellExecute = false;
+                        psi.WindowStyle = ProcessWindowStyle.Hidden;
+
+                        serverProcess = Process.Start(psi);
+                        Log("Node process started with PID: " + (serverProcess != null ? serverProcess.Id.ToString() : "null"));
                     }
+                    else
+                    {
+                        Log("Port 3800 is already in use; attaching to existing server instance.");
+                    }
+
+                    // Wait up to 25 seconds for the server to respond with 200 OK
+                    Log("Waiting for HTTP 200 OK on http://localhost:3800...");
+                    bool ready = WaitForServer("http://localhost:3800", 25);
+                    Log("Server ready status: " + ready);
+
+                    // Setup System Tray Icon with controls
+                    SetupTrayIcon(targetDir);
+
+                    // Launch desktop window in app mode
+                    Log("Launching browser window...");
+                    LaunchBrowser("http://localhost:3800");
+
+                    // Keep app running via dedicated ApplicationContext until user explicitly exits
+                    appContext = new ApplicationContext();
+                    Log("Running message loop...");
+                    Application.Run(appContext);
+                    Log("Message loop terminated.");
                 }
-
-                Directory.SetCurrentDirectory(targetDir);
-
-                // Start node server if port 3800 is not already in use
-                if (!IsPortInUse(3800))
+                catch (Exception ex)
                 {
-                    ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = nodeExe;
-                    psi.Arguments = "\"" + serverJs + "\"";
-                    psi.WorkingDirectory = targetDir;
-                    psi.CreateNoWindow = true;
-                    psi.UseShellExecute = false;
-                    psi.WindowStyle = ProcessWindowStyle.Hidden;
+                    Log("CRITICAL ERROR: " + ex.ToString());
+                    MessageBox.Show("Gagal menjalankan aplikasi: " + ex.Message, "TOEFL Score Splitter Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally
+                {
+                    CleanupServer();
+                }
+            }
+        }
 
-                    serverProcess = Process.Start(psi);
+        private static void SetupTrayIcon(string targetDir)
+        {
+            try
+            {
+                trayIcon = new NotifyIcon();
+                trayIcon.Text = "OSEE TOEFL ITP Score Splitter (Port 3800)";
+
+                try
+                {
+                    trayIcon.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
+                }
+                catch
+                {
+                    trayIcon.Icon = SystemIcons.Application;
                 }
 
-                // Wait up to 25 seconds for the server to respond with 200 OK
-                WaitForServer("http://localhost:3800", 25);
+                ContextMenu contextMenu = new ContextMenu();
 
-                // Launch dedicated Desktop Window in App Mode (Edge or Chrome)
+                MenuItem openItem = new MenuItem("Buka Aplikasi TOEFL Splitter", (s, e) => LaunchBrowser("http://localhost:3800"));
+                openItem.DefaultItem = true;
+                contextMenu.MenuItems.Add(openItem);
+
+                string outputDir = Path.Combine(targetDir, "storage", "output");
+                contextMenu.MenuItems.Add(new MenuItem("Buka Folder Hasil Ekspor", (s, e) =>
+                {
+                    if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
+                    Process.Start("explorer.exe", "\"" + outputDir + "\"");
+                }));
+
+                contextMenu.MenuItems.Add("-");
+
+                contextMenu.MenuItems.Add(new MenuItem("Keluar / Matikan Aplikasi", (s, e) =>
+                {
+                    Log("User clicked 'Keluar / Matikan Aplikasi'");
+                    if (trayIcon != null)
+                    {
+                        trayIcon.Visible = false;
+                        trayIcon.Dispose();
+                    }
+                    CleanupServer();
+                    if (appContext != null)
+                    {
+                        appContext.ExitThread();
+                    }
+                    else
+                    {
+                        Application.Exit();
+                    }
+                }));
+
+                trayIcon.ContextMenu = contextMenu;
+                trayIcon.DoubleClick += (s, e) => LaunchBrowser("http://localhost:3800");
+                trayIcon.Visible = true;
+
+                trayIcon.ShowBalloonTip(3000, "OSEE TOEFL ITP Score Splitter", "Aplikasi aktif di latar belakang (Port 3800). Klik kanan ikon ini untuk opsi lain.", ToolTipIcon.Info);
+            }
+            catch (Exception ex)
+            {
+                Log("SetupTrayIcon error: " + ex.Message);
+            }
+        }
+
+        private static void LaunchBrowser(string appUrl)
+        {
+            try
+            {
                 string browserPath = FindBrowser();
-                string appUrl = "http://localhost:3800";
-                string profileDir = Path.Combine(targetDir, "Profile");
-                string arguments = "--app=" + appUrl + " --window-size=1360,880 --user-data-dir=\"" + profileDir + "\"";
-
-                Process browserProcess = null;
                 if (!string.IsNullOrEmpty(browserPath))
                 {
                     ProcessStartInfo bPsi = new ProcessStartInfo();
                     bPsi.FileName = browserPath;
-                    bPsi.Arguments = arguments;
-                    bPsi.UseShellExecute = false;
-                    browserProcess = Process.Start(bPsi);
+                    bPsi.Arguments = "--app=" + appUrl + " --window-size=1360,880";
+                    bPsi.UseShellExecute = true;
+                    Process.Start(bPsi);
+                    return;
                 }
-                else
-                {
-                    Process.Start(appUrl);
-                }
-
-                if (browserProcess != null)
-                {
-                    browserProcess.WaitForExit();
-                }
-                else
-                {
-                    // Fallback delay if opened via default system handler
-                    Thread.Sleep(5000);
-                }
-
-                CleanupServer();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menjalankan aplikasi: " + ex.Message, "TOEFL Score Splitter Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                CleanupServer();
+                Log("LaunchBrowser with --app error: " + ex.Message);
+            }
+
+            try
+            {
+                ProcessStartInfo fallbackPsi = new ProcessStartInfo();
+                fallbackPsi.FileName = appUrl;
+                fallbackPsi.UseShellExecute = true;
+                Process.Start(fallbackPsi);
+            }
+            catch (Exception ex)
+            {
+                Log("LaunchBrowser fallback error: " + ex.Message);
             }
         }
 
@@ -149,7 +278,7 @@ namespace ToeflScoreSplitter
             catch { return false; }
         }
 
-        private static void WaitForServer(string url, int timeoutSeconds)
+        private static bool WaitForServer(string url, int timeoutSeconds)
         {
             DateTime start = DateTime.Now;
             while ((DateTime.Now - start).TotalSeconds < timeoutSeconds)
@@ -160,11 +289,12 @@ namespace ToeflScoreSplitter
                     request.Timeout = 1000;
                     using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
                     {
-                        if (response.StatusCode == HttpStatusCode.OK) return;
+                        if (response.StatusCode == HttpStatusCode.OK) return true;
                     }
                 }
                 catch { Thread.Sleep(250); }
             }
+            return false;
         }
 
         private static string FindBrowser()
@@ -184,14 +314,44 @@ namespace ToeflScoreSplitter
             return null;
         }
 
+        private static void KillTargetDirNodeProcesses(string targetDir)
+        {
+            try
+            {
+                foreach (var proc in Process.GetProcessesByName("node"))
+                {
+                    try
+                    {
+                        if (proc.MainModule != null && proc.MainModule.FileName.StartsWith(targetDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            proc.Kill();
+                            proc.WaitForExit(1000);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
         private static void CleanupServer()
         {
+            Log("Cleaning up server processes...");
             try
             {
                 if (serverProcess != null && !serverProcess.HasExited)
                 {
                     serverProcess.Kill();
+                    Log("serverProcess killed.");
                 }
+            }
+            catch { }
+
+            try
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string targetDir = Path.Combine(localAppData, "TOEFL_ITP_Score_Splitter_App");
+                KillTargetDirNodeProcesses(targetDir);
             }
             catch { }
         }
